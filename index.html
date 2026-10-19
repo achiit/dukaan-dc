@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="mr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>कोचिंग क्लास मॅनेजर</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mukta:wght@400;600;700&family=Yatra+One&display=swap">
+<style>
+/* Layout: a framed classroom blackboard carries the editable class name; a sticky tab strip and plain white cards sit below it. */
+:root{
+  --bg:#EDF2EF; --surface:#FFFFFF; --surface2:#E3EBE7; --ink:#14211D; --muted:#566660; --line:#C9D5CF;
+  --accent:#1B6B57; --accent-ink:#FFFFFF;
+  --board:#16312A; --wood:#8B5E34; --chalk:#F4F1E6; --chalk-y:#F3D56B;
+  --good:#1E7D4F; --good-bg:#DCF1E4; --warn:#7F5300; --warn-bg:#FAEBC2; --bad:#B3321F; --bad-bg:#F9DAD4;
+  --font-display:'Yatra One','Mukta','Noto Sans Devanagari',Georgia,serif;
+  --font-body:'Mukta','Noto Sans Devanagari',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0C1411; --surface:#14201C; --surface2:#1C2C27; --ink:#E6EEEA; --muted:#97A9A2; --line:#2B3D37;
+  --accent:#4DB99A; --accent-ink:#06130F; --board:#0F221C; --wood:#6E4A29;
+  --good:#5CCB92; --good-bg:#12301F; --warn:#E5B94A; --warn-bg:#33270A; --bad:#F0806E; --bad-bg:#3A1914; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0C1411; --surface:#14201C; --surface2:#1C2C27; --ink:#E6EEEA; --muted:#97A9A2; --line:#2B3D37;
+  --accent:#4DB99A; --accent-ink:#06130F; --board:#0F221C; --wood:#6E4A29;
+  --good:#5CCB92; --good-bg:#12301F; --warn:#E5B94A; --warn-bg:#33270A; --bad:#F0806E; --bad-bg:#3A1914; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{margin:0}
+body{font-family:var(--font-body);font-size:16px;line-height:1.5;background:var(--bg);color:var(--ink);
+  padding-block:12px 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.app{max-width:760px;margin:0 auto}
+h1,h2,h3,h4,p{margin:0}
+h2{font-family:var(--font-display);font-weight:400;font-size:20px;line-height:1.3;text-wrap:balance}
+h3{font-size:17px;line-height:1.3}
+h4{font-size:16px}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+/* Blackboard header */
+.board{position:relative;background:var(--board);color:var(--chalk);border:6px solid var(--wood);border-radius:4px;
+  padding:18px 16px 26px;box-shadow:inset 0 0 40px rgba(0,0,0,.4);display:grid;gap:14px}
+.board::after{content:"";position:absolute;left:14px;right:14px;bottom:9px;height:3px;background:var(--chalk);opacity:.28;border-radius:2px}
+.board :focus-visible{outline-color:var(--chalk-y)}
+.bTop{display:flex;gap:14px;align-items:center;min-width:0}
+.logo{flex:0 0 auto;width:54px;height:54px;border:2px solid var(--chalk-y);color:var(--chalk-y);display:grid;place-items:center;
+  font-family:var(--font-display);font-size:28px;line-height:1}
+.bText{min-width:0}
+.board h1{font-family:var(--font-display);font-weight:400;font-size:clamp(26px,7.2vw,40px);line-height:1.2;text-wrap:balance;overflow-wrap:anywhere}
+.tag{font-size:15px;color:var(--chalk);opacity:.82;overflow-wrap:anywhere}
+.bBtns,.row{display:flex;gap:8px;flex-wrap:wrap}
+.nameForm{display:grid;gap:10px}
+.nameForm .lbl{color:var(--chalk);opacity:.85}
+.nameForm input{background:rgba(255,255,255,.08);border:1px solid rgba(244,241,230,.5);color:var(--chalk)}
+
+/* Tabs */
+.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;gap:6px;overflow-x:auto;
+  padding:10px 0;margin-top:4px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;min-height:42px;padding:0 15px;border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  border-radius:6px;font-weight:700;font-size:15px;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+
+/* Layout helpers */
+#panel{display:grid;gap:14px;margin-top:6px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px;display:grid;gap:12px;min-width:0}
+.list{display:grid;gap:10px}
+.sub,.hint{font-size:14px;color:var(--muted)}
+.sel{user-select:all;-webkit-user-select:all;font-variant-numeric:tabular-nums;font-weight:600}
+.form{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));align-items:end}
+.form .wide{grid-column:1/-1}
+.f{min-width:0}
+.f.grow{flex:1 1 200px}
+.lbl{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:3px}
+input,select,textarea{width:100%;min-height:44px;padding:8px 10px;background:var(--surface);border:1px solid var(--line);border-radius:6px}
+textarea{resize:vertical;line-height:1.45}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+.toolbar .f:not(.grow){flex:0 1 170px}
+
+/* Buttons and chips */
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border-radius:6px;
+  border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:15px;cursor:pointer;text-decoration:none;text-align:center}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn.wa{background:#1B8F4B;border-color:#1B8F4B;color:#fff}
+.btn.danger-o{background:transparent;color:var(--bad);border-color:var(--bad)}
+.btn.armed{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn.sm{min-height:40px;padding:0 14px}
+.btn.xs{min-height:34px;padding:0 11px;font-size:13px}
+.board .btn.chalk{background:var(--chalk-y);border-color:var(--chalk-y);color:#1A1A0C}
+.board .btn.ghost-chalk,.btn.ghost-chalk{background:transparent;border-color:rgba(244,241,230,.6);color:var(--chalk)}
+.chip{display:inline-flex;align-items:center;min-height:26px;padding:1px 10px;border-radius:999px;font-size:13px;font-weight:600;background:var(--surface2);color:var(--ink)}
+.chip.good{background:var(--good-bg);color:var(--good)}
+.chip.warn{background:var(--warn-bg);color:var(--warn)}
+.chip.bad{background:var(--bad-bg);color:var(--bad)}
+.btnchip{border:1px solid var(--line);min-height:36px;cursor:pointer;background:var(--surface)}
+
+/* Dashboard */
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.tile b{display:block;font-family:var(--font-display);font-weight:400;font-size:28px;line-height:1.2;font-variant-numeric:tabular-nums}
+.tile span{font-size:14px;color:var(--muted)}
+.banner{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:10px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:14px;font-weight:600}
+.banner span{flex:1 1 220px}
+.item{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line)}
+.item:last-child{border-bottom:0}
+.item>*{min-width:0}
+.pre{white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* Students */
+.stu{gap:10px}
+.stuTop{display:flex;gap:12px;align-items:center}
+.avatar{flex:0 0 auto;width:42px;height:42px;border-radius:50%;background:var(--surface2);display:grid;place-items:center;font-weight:700;font-size:18px}
+.who{min-width:0}
+.who h3{overflow-wrap:anywhere}
+.meta,.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.complaint{border-top:2px dashed var(--line);padding-top:12px;display:grid;gap:10px}
+.presets{display:flex;gap:6px;flex-wrap:wrap}
+
+/* Attendance, fees, marks */
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg .btn{flex:1 1 110px}
+.seg .btn[aria-pressed="true"].p{background:var(--good-bg);color:var(--good);border-color:var(--good)}
+.seg .btn[aria-pressed="true"].a{background:var(--bad-bg);color:var(--bad);border-color:var(--bad)}
+.bar{height:8px;background:var(--surface2);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.payRow{display:flex;gap:8px}
+.payRow input{flex:1 1 auto}
+.mrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.mrow:last-child{border-bottom:0}
+.mscore{display:flex;align-items:center;gap:6px}
+.mscore input{width:84px;text-align:center}
+.mmeta{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tests{display:flex;gap:6px;flex-wrap:wrap}
+.tests .btnchip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.day h3{display:flex;gap:8px;align-items:center}
+.done{text-decoration:line-through;opacity:.6}
+
+.foot{margin-top:22px;padding-top:14px;border-top:1px solid var(--line);text-align:center;color:var(--muted);font-size:14px}
+.foot strong{color:var(--ink)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);
+  padding:10px 16px;border-radius:6px;z-index:20;max-width:calc(100% - 32px);font-weight:600;font-size:15px;text-align:center}
+@media (min-width:560px){.tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header id="hdr"><div class="board"><div class="bTop"><div class="logo" aria-hidden="true">स</div><div class="bText"><h1>सर्वज्ञ कोचिंग क्लासेस</h1><p class="tag">शिक्षणाची नवी दिशा</p></div></div><div class="bBtns"><button class="btn xs ghost-chalk" data-act="editName">नाव बदला</button><button class="btn xs chalk" data-act="dlCsv">सर्व हिस्ट्री डाउनलोड करा</button><button class="btn xs ghost-chalk" data-act="theme">गडद / उजळ</button></div></div></header>
+  <div id="storeNote"></div>
+  <nav class="tabs" id="tabs" role="tablist" aria-label="विभाग"><button class="tab" role="tab" aria-selected="true" data-tab="dash">डॅशबोर्ड</button><button class="tab" role="tab" aria-selected="false" data-tab="stu">विद्यार्थी</button><button class="tab" role="tab" aria-selected="false" data-tab="att">हजेरी</button><button class="tab" role="tab" aria-selected="false" data-tab="fee">फी</button><button class="tab" role="tab" aria-selected="false" data-tab="marks">टेस्ट गुण</button><button class="tab" role="tab" aria-selected="false" data-tab="tt">वेळापत्रक</button><button class="tab" role="tab" aria-selected="false" data-tab="not">सूचना</button><button class="tab" role="tab" aria-selected="false" data-tab="hw">गृहपाठ</button><button class="tab" role="tab" aria-selected="false" data-tab="set">सेटिंग्ज</button></nav>
+  <main id="panel"><div class="banner"><span>हा उदाहरण डेटा आहे, फक्त दाखवण्यासाठी. स्वतःचा डेटा टाकण्यापूर्वी तो काढा.</span><button class="btn xs" data-act="clearSample" data-confirm="1">उदाहरण डेटा काढा</button></div><div class="tiles"><div class="tile"><b>5</b><span>एकूण विद्यार्थी</span></div><div class="tile"><b>4/5</b><span>आज उपस्थित</span></div><div class="tile"><b>₹25,000</b><span>फी बाकी</span></div><div class="tile"><b>1</b><span>चालू गृहपाठ</span></div></div><section class="card"><h2>आजची हजेरी</h2><div class="item"><span><strong>ओम कुलकर्णी</strong> <span class="chip bad">गैरहजर</span></span><a class="btn xs wa" target="_blank" rel="noopener" href="https://wa.me/919000000003?text=%E0%A4%A8%E0%A4%AE%E0%A4%B8%E0%A5%8D%E0%A4%95%E0%A4%BE%E0%A4%B0%2C%20%E0%A4%93%E0%A4%AE%20%E0%A4%95%E0%A5%81%E0%A4%B2%E0%A4%95%E0%A4%B0%E0%A5%8D%E0%A4%A3%E0%A5%80%20%E0%A4%86%E0%A4%9C%20(19%20%E0%A4%91%E0%A4%95%E0%A5%8D%E0%A4%9F%E0%A5%8B%202026)%20%E0%A4%B8%E0%A4%B0%E0%A5%8D%E0%A4%B5%E0%A4%9C%E0%A5%8D%E0%A4%9E%20%E0%A4%95%E0%A5%8B%E0%A4%9A%E0%A4%BF%E0%A4%82%E0%A4%97%20%E0%A4%95%E0%A5%8D%E0%A4%B2%E0%A4%BE%E0%A4%B8%E0%A5%87%E0%A4%B8%20%E0%A4%AE%E0%A4%A7%E0%A5%8D%E0%A4%AF%E0%A5%87%20%E0%A4%97%E0%A5%88%E0%A4%B0%E0%A4%B9%E0%A4%9C%E0%A4%B0%20%E0%A4%86%E0%A4%B9%E0%A5%87.">पालकांना कळवा</a></div><div class="row"><button class="btn sm" data-go="att">हजेरी घ्या</button></div></section><section class="card"><h2>आजचे वेळापत्रक (सोमवार)</h2><div class="item"><span><strong>07:00</strong> &nbsp;गणित</span><span class="chip">१० वी</span></div><div class="item"><span><strong>17:00</strong> &nbsp;रसायनशास्त्र</span><span class="chip">१२ वी</span></div></section><section class="card"><h2>फी वसुली</h2><div class="item"><span>जमा झालेली फी</span><strong>₹47,000</strong></div><div class="item"><span>बाकी फी</span><strong>₹25,000</strong></div><div class="row"><button class="btn sm ghost" data-go="fee">फी पाहा</button></div></section><section class="card"><h2>ताजी सूचना</h2><p class="pre">रविवारी सकाळी ८ वाजता १० वी ची सराव परीक्षा आहे. सर्वांनी वेळेवर यावे.</p><p class="sub">19 ऑक्टो 2026</p></section></main>
+  <footer class="foot">ही वेबसाईट बनवली: <strong>सुयोग</strong><br>This website created by <strong>Suyog</strong></footer>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function(){
+'use strict';
+const KEY='coachingClassManager.v1';
+const DAYS=['सोमवार','मंगळवार','बुधवार','गुरुवार','शुक्रवार','शनिवार','रविवार'];
+const MONTHS=['जाने','फेब्रु','मार्च','एप्रि','मे','जून','जुलै','ऑग','सप्टें','ऑक्टो','नोव्हें','डिसें'];
+const PRESETS=['आज वर्गात गैरहजर होता','गृहपाठ पूर्ण केला नाही','वर्गात गोंधळ करतो','अभ्यासात लक्ष नाही','मोबाईलचा वापर केला','फी बाकी आहे'];
+const TABS=[['dash','डॅशबोर्ड'],['stu','विद्यार्थी'],['att','हजेरी'],['fee','फी'],['marks','टेस्ट गुण'],['tt','वेळापत्रक'],['not','सूचना'],['hw','गृहपाठ'],['set','सेटिंग्ज']];
+
+const $=(s,r)=>(r||document).querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,10);
+const z=n=>String(n).padStart(2,'0');
+const ymd=d=>d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate());
+const today=()=>ymd(new Date());
+const fmtDate=s=>{if(!s)return '';const p=s.split('-');return (+p[2])+' '+MONTHS[+p[1]-1]+' '+p[0];};
+const inr=n=>'₹'+Number(n||0).toLocaleString('en-IN');
+const first=s=>Array.from(String(s||'').trim())[0]||'?';
+const todayName=()=>DAYS[(new Date().getDay()+6)%7];
+
+function seed(){
+  const ids=[uid(),uid(),uid(),uid(),uid()];
+  const t=today();
+  const y=new Date(Date.now()-864e5);
+  const subj=['गणित','विज्ञान','इंग्रजी','गणित','भौतिकशास्त्र','सराव टेस्ट'];
+  const subj2=['रसायनशास्त्र','गणित','भौतिकशास्त्र','जीवशास्त्र','रसायनशास्त्र','सराव टेस्ट'];
+  const tt=[];
+  for(let i=0;i<6;i++){
+    tt.push({id:uid(),day:DAYS[i],time:'07:00',subject:subj[i],batch:'१० वी'});
+    tt.push({id:uid(),day:DAYS[i],time:'17:00',subject:subj2[i],batch:'१२ वी'});
+  }
+  const tomorrow=ymd(new Date(Date.now()+864e5));
+  return {
+    name:'सर्वज्ञ कोचिंग क्लासेस', tag:'शिक्षणाची नवी दिशा', sample:true, theme:'',
+    students:[
+      {id:ids[0],name:'आर्यन पाटील',phone:'9000000001',batch:'१० वी',fee:12000,pay:[{amt:8000,date:t}]},
+      {id:ids[1],name:'सानिका देशमुख',phone:'9000000002',batch:'१० वी',fee:12000,pay:[{amt:12000,date:t}]},
+      {id:ids[2],name:'ओम कुलकर्णी',phone:'9000000003',batch:'१२ वी',fee:18000,pay:[{amt:6000,date:t}]},
+      {id:ids[3],name:'प्रतीक्षा जाधव',phone:'9000000004',batch:'१२ वी',fee:18000,pay:[{amt:18000,date:t}]},
+      {id:ids[4],name:'रोहन शिंदे',phone:'9000000005',batch:'१० वी',fee:12000,pay:[{amt:3000,date:t}]}
+    ],
+    att:{[t]:{[ids[0]]:'P',[ids[1]]:'P',[ids[2]]:'A',[ids[3]]:'P',[ids[4]]:'P'},[ymd(y)]:{[ids[0]]:'P',[ids[1]]:'P',[ids[2]]:'P',[ids[3]]:'A',[ids[4]]:'P'}},
+    tests:[{id:uid(),title:'साप्ताहिक टेस्ट १',max:50,date:t,scores:{[ids[0]]:38,[ids[1]]:46,[ids[2]]:31,[ids[3]]:44,[ids[4]]:27}}],
+    tt:tt,
+    notices:[{id:uid(),text:'रविवारी सकाळी ८ वाजता १० वी ची सराव परीक्षा आहे. सर्वांनी वेळेवर यावे.',date:t}],
+    hw:[{id:uid(),batch:'१० वी',subject:'गणित',text:'भूमिती प्रकरण ३ मधील सराव संच ३.२ सोडवा.',due:tomorrow,done:false}]
+  };
+}
+function norm(o){
+  o.name=o.name||'तुमच्या क्लासचे नाव'; o.tag=o.tag||''; o.theme=o.theme||'';
+  o.students=(o.students||[]).map(s=>Object.assign({pay:[],fee:0,batch:'',phone:''},s));
+  o.att=o.att||{}; o.tests=o.tests||[]; o.tt=o.tt||[]; o.notices=o.notices||[]; o.hw=o.hw||[];
+  return o;
+}
+function load(){try{const r=localStorage.getItem(KEY);if(r){const o=JSON.parse(r);if(o&&Array.isArray(o.students))return norm(o);}}catch(e){}return null;}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+
+let S=load()||seed();
+const ui={tab:'dash',batch:'',q:'',open:null,edit:false,attDate:today(),test:null};
+const drafts={};
+
+/* helpers */
+const paidOf=s=>(s.pay||[]).reduce((a,p)=>a+Number(p.amt||0),0);
+const pendOf=s=>Math.max(0,Number(s.fee||0)-paidOf(s));
+const batches=()=>[...new Set(S.students.map(s=>s.batch).filter(Boolean))];
+function vis(useQ){
+  if(ui.batch&&batches().indexOf(ui.batch)<0)ui.batch='';
+  const q=useQ?ui.q.trim().toLowerCase():'';
+  return S.students.filter(s=>(!ui.batch||s.batch===ui.batch)&&(!q||s.name.toLowerCase().includes(q)||String(s.phone).includes(q)));
+}
+function waLink(phone,msg){
+  let d=String(phone||'').replace(/\D/g,'');
+  if(d.length===11&&d[0]==='0')d=d.slice(1);
+  if(d.length===10)d='91'+d;
+  return (d?'https://wa.me/'+d:'https://wa.me/')+'?text='+encodeURIComponent(msg);
+}
+function attPct(id){let t=0,p=0;for(const d in S.att){const v=S.att[d][id];if(v){t++;if(v==='P')p++;}}return t?Math.round(p*100/t):null;}
+let toastTimer;
+function toast(m){const el=$('#toast');el.textContent=m;el.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{el.hidden=true;},2400);}
+function copy(text,okMsg,fallbackEl){
+  const fail=()=>{if(fallbackEl){try{fallbackEl.focus();fallbackEl.select();}catch(e){}}toast('कॉपी झाले नाही. मजकूर निवडून कॉपी करा.');};
+  try{navigator.clipboard.writeText(text).then(()=>toast(okMsg||'कॉपी झाले'),fail);}catch(e){fail();}
+}
+const sampleBanner=()=>S.sample?'<div class="banner"><span>हा उदाहरण डेटा आहे, फक्त दाखवण्यासाठी. स्वतःचा डेटा टाकण्यापूर्वी तो काढा.</span><button class="btn xs" data-act="clearSample" data-confirm="1">उदाहरण डेटा काढा</button></div>':'';
+
+/* header */
+function renderHeader(){
+  const h=$('#hdr');
+  if(ui.edit){
+    h.innerHTML='<form class="board nameForm" id="nameForm" autocomplete="off">'+
+      '<div><label class="lbl" for="nameIn">क्लासचे नाव</label><input id="nameIn" value="'+esc(S.name)+'" maxlength="60"></div>'+
+      '<div><label class="lbl" for="tagIn">नावाखालील ओळ (ऐच्छिक)</label><input id="tagIn" value="'+esc(S.tag)+'" maxlength="80"></div>'+
+      '<div class="row"><button class="btn chalk" type="submit">सेव्ह करा</button>'+
+      '<button class="btn ghost-chalk" type="button" data-act="cutName">नाव कट करा</button>'+
+      '<button class="btn ghost-chalk" type="button" data-act="cancelName">रद्द</button></div></form>';
+  }else{
+    h.innerHTML='<div class="board"><div class="bTop"><div class="logo" aria-hidden="true">'+esc(first(S.name))+'</div>'+
+      '<div class="bText"><h1>'+esc(S.name)+'</h1>'+(S.tag?'<p class="tag">'+esc(S.tag)+'</p>':'')+'</div></div>'+
+      '<div class="bBtns"><button class="btn xs ghost-chalk" data-act="editName">नाव बदला</button>'+
+      '<button class="btn xs chalk" data-act="dlCsv">सर्व हिस्ट्री डाउनलोड करा</button>'+
+      '<button class="btn xs ghost-chalk" data-act="theme">गडद / उजळ</button></div></div>';
+  }
+}
+function renderTabs(){
+  const el=$('#tabs');const sl=el.scrollLeft;
+  el.innerHTML=TABS.map(t=>'<button class="tab" role="tab" aria-selected="'+(ui.tab===t[0])+'" data-tab="'+t[0]+'">'+t[1]+'</button>').join('');
+  el.scrollLeft=sl;
+}
+function toolbar(withSearch){
+  const bs=batches();
+  return '<div class="toolbar">'+(withSearch?'<div class="f grow"><label class="lbl" for="q">शोधा</label><input id="q" type="search" placeholder="नाव किंवा मोबाईल" value="'+esc(ui.q)+'"></div>':'')+
+   '<div class="f"><label class="lbl" for="batchSel">बॅच</label><select id="batchSel"><option value="">सर्व बॅच</option>'+
+   bs.map(b=>'<option value="'+esc(b)+'"'+(b===ui.batch?' selected':'')+'>'+esc(b)+'</option>').join('')+'</select></div></div>';
+}
+const empty=m=>'<div class="card"><p class="sub">'+m+'</p></div>';
+
+/* 1 dashboard */
+function pDash(){
+  const t=today(),day=S.att[t]||{};
+  const ids=S.students.map(s=>s.id);
+  const marked=ids.filter(id=>day[id]);
+  const pres=marked.filter(id=>day[id]==='P').length;
+  const absent=S.students.filter(s=>day[s.id]==='A');
+  const pend=S.students.reduce((a,s)=>a+pendOf(s),0);
+  const coll=S.students.reduce((a,s)=>a+paidOf(s),0);
+  const hw=S.hw.filter(h=>!h.done).length;
+  const tn=todayName();
+  const ttd=S.tt.filter(x=>x.day===tn).sort((a,b)=>a.time.localeCompare(b.time));
+  const note=S.notices.slice().sort((a,b)=>b.date.localeCompare(a.date))[0];
+  return sampleBanner()+
+  '<div class="tiles"><div class="tile"><b>'+S.students.length+'</b><span>एकूण विद्यार्थी</span></div>'+
+  '<div class="tile"><b>'+(marked.length?pres+'/'+marked.length:'—')+'</b><span>आज उपस्थित</span></div>'+
+  '<div class="tile"><b>'+inr(pend)+'</b><span>फी बाकी</span></div>'+
+  '<div class="tile"><b>'+hw+'</b><span>चालू गृहपाठ</span></div></div>'+
+  '<section class="card"><h2>आजची हजेरी</h2>'+
+  (marked.length?(absent.length?absent.map(s=>'<div class="item"><span><strong>'+esc(s.name)+'</strong> <span class="chip bad">गैरहजर</span></span><a class="btn xs wa" target="_blank" rel="noopener" href="'+esc(waLink(s.phone,'नमस्कार, '+s.name+' आज ('+fmtDate(t)+') '+S.name+' मध्ये गैरहजर आहे.'))+'">पालकांना कळवा</a></div>').join(''):'<p class="sub">आज सर्व विद्यार्थी उपस्थित आहेत.</p>'):'<p class="sub">आजची हजेरी अजून घेतलेली नाही.</p>')+
+  '<div class="row"><button class="btn sm" data-go="att">हजेरी घ्या</button></div></section>'+
+  '<section class="card"><h2>आजचे वेळापत्रक ('+tn+')</h2>'+
+  (ttd.length?ttd.map(x=>'<div class="item"><span><strong>'+esc(x.time)+'</strong> &nbsp;'+esc(x.subject)+'</span><span class="chip">'+esc(x.batch)+'</span></div>').join(''):'<p class="sub">आज कोणताही तास नाही.</p>')+'</section>'+
+  '<section class="card"><h2>फी वसुली</h2><div class="item"><span>जमा झालेली फी</span><strong>'+inr(coll)+'</strong></div><div class="item"><span>बाकी फी</span><strong>'+inr(pend)+'</strong></div><div class="row"><button class="btn sm ghost" data-go="fee">फी पाहा</button></div></section>'+
+  (note?'<section class="card"><h2>ताजी सूचना</h2><p class="pre">'+esc(note.text)+'</p><p class="sub">'+fmtDate(note.date)+'</p></section>':'');
+}
+
+/* 2 students + complaint */
+function complaintHTML(s){
+  const text=drafts[s.id]!==undefined?drafts[s.id]:'नमस्कार पालक,\n'+S.name+' कडून सूचना.\nविद्यार्थी: '+s.name+'\nतक्रार: ';
+  return '<div class="complaint"><h4>तक्रार पाठवा</h4>'+
+   '<p class="sub">पालकांचा नंबर: <span class="sel">'+esc(s.phone)+'</span> <button class="btn xs ghost" data-act="copyPhone" data-id="'+s.id+'">नंबर कॉपी</button></p>'+
+   '<div class="presets">'+PRESETS.map((p,i)=>'<button type="button" class="chip btnchip" data-act="preset" data-id="'+s.id+'" data-i="'+i+'">'+esc(p)+'</button>').join('')+'</div>'+
+   '<div><label class="lbl" for="cmp-'+s.id+'">मेसेज (येथे लिहा)</label><textarea id="cmp-'+s.id+'" class="cmpText" data-id="'+s.id+'" rows="6">'+esc(text)+'</textarea></div>'+
+   '<div class="row"><a id="waSend-'+s.id+'" class="btn wa" target="_blank" rel="noopener" href="'+esc(waLink(s.phone,text))+'">WhatsApp वर पाठवा</a>'+
+   '<button class="btn ghost" data-act="copyMsg" data-id="'+s.id+'">मेसेज कॉपी करा</button></div>'+
+   '<p class="hint">WhatsApp उघडल्यावर तिथे "Send" दाबल्यावरच मेसेज जातो.</p></div>';
+}
+function stuCard(s){
+  const pct=attPct(s.id),pend=pendOf(s),open=ui.open===s.id;
+  return '<article class="card stu"><div class="stuTop"><div class="avatar" aria-hidden="true">'+esc(first(s.name))+'</div><div class="who"><h3>'+esc(s.name)+'</h3>'+
+   '<p class="sub"><span class="sel">'+esc(s.phone)+'</span> · '+esc(s.batch)+'</p></div></div>'+
+   '<div class="actions"><button class="btn sm danger-o" data-act="complain" data-id="'+s.id+'" aria-expanded="'+open+'">तक्रार</button>'+
+   '<button class="btn sm ghost" data-act="delStu" data-id="'+s.id+'" data-confirm="1">काढा</button></div>'+
+   (open?complaintHTML(s):'')+
+   '<div class="meta">'+(pct===null?'':'<span class="chip '+(pct>=75?'good':pct>=50?'warn':'bad')+'">हजेरी '+pct+'%</span>')+
+   '<span class="chip '+(pend?'warn':'good')+'">'+(pend?'फी बाकी '+inr(pend):'फी पूर्ण')+'</span></div></article>';
+}
+function stuListHTML(){
+  const l=vis(true);
+  if(!S.students.length)return empty('अजून विद्यार्थी नाहीत. वरील फॉर्मवरून पहिला विद्यार्थी जोडा.');
+  if(!l.length)return empty('या शोधासाठी कोणताही विद्यार्थी सापडला नाही.');
+  return l.map(stuCard).join('');
+}
+function renderStuList(){const el=$('#stuList');if(el)el.innerHTML=stuListHTML();const c=$('#stuCount');if(c)c.textContent=vis(true).length+' विद्यार्थी';}
+function pStu(){
+  return sampleBanner()+
+  '<section class="card"><h2>नवीन विद्यार्थी जोडा</h2><form class="form" data-form="addStu" autocomplete="off">'+
+  '<div class="f"><label class="lbl" for="sn">विद्यार्थ्याचे नाव</label><input id="sn" name="name" required maxlength="60"></div>'+
+  '<div class="f"><label class="lbl" for="sp">पालकांचा मोबाईल</label><input id="sp" name="phone" inputmode="tel" required pattern="[0-9+ ]{10,14}" maxlength="14" placeholder="10 अंकी नंबर"></div>'+
+  '<div class="f"><label class="lbl" for="sb">बॅच / इयत्ता</label><input id="sb" name="batch" list="batchList" maxlength="30" placeholder="उदा. १० वी"></div>'+
+  '<datalist id="batchList">'+batches().map(b=>'<option value="'+esc(b)+'">').join('')+'</datalist>'+
+  '<div class="f"><label class="lbl" for="sf">एकूण फी (₹)</label><input id="sf" name="fee" type="number" min="0" inputmode="numeric" value="0"></div>'+
+  '<button class="btn wide" type="submit">विद्यार्थी जोडा</button></form></section>'+
+  toolbar(true)+'<p class="sub" id="stuCount">'+vis(true).length+' विद्यार्थी</p><div class="list" id="stuList">'+stuListHTML()+'</div>';
+}
+
+/* 3 attendance */
+function pAtt(){
+  const d=ui.attDate,day=S.att[d]||{},l=vis();
+  const p=l.filter(s=>day[s.id]==='P').length,a=l.filter(s=>day[s.id]==='A').length;
+  return '<section class="card"><h2>हजेरी</h2><div class="toolbar"><div class="f"><label class="lbl" for="attDate">तारीख</label><input id="attDate" type="date" value="'+d+'"></div>'+
+  '<div class="f"><label class="lbl" for="batchSel">बॅच</label><select id="batchSel"><option value="">सर्व बॅच</option>'+batches().map(b=>'<option value="'+esc(b)+'"'+(b===ui.batch?' selected':'')+'>'+esc(b)+'</option>').join('')+'</select></div></div>'+
+  '<div class="meta"><span class="chip good">उपस्थित '+p+'</span><span class="chip bad">गैरहजर '+a+'</span><span class="chip">बाकी '+(l.length-p-a)+'</span></div>'+
+  '<div class="row"><button class="btn sm ghost" data-act="allP">सर्वांना उपस्थित करा</button></div></section>'+
+  (l.length?'<div class="list">'+l.map(s=>{
+    const v=day[s.id];
+    return '<div class="card"><div><h3>'+esc(s.name)+'</h3><p class="sub">'+esc(s.batch)+'</p></div><div class="seg">'+
+     '<button class="btn p ghost" data-act="mark" data-id="'+s.id+'" data-v="P" aria-pressed="'+(v==='P')+'">उपस्थित</button>'+
+     '<button class="btn a ghost" data-act="mark" data-id="'+s.id+'" data-v="A" aria-pressed="'+(v==='A')+'">गैरहजर</button>'+
+     (v==='A'?'<a class="btn wa" target="_blank" rel="noopener" href="'+esc(waLink(s.phone,'नमस्कार, '+s.name+' आज ('+fmtDate(d)+') '+S.name+' मध्ये गैरहजर आहे.'))+'">पालकांना कळवा</a>':'')+'</div></div>';
+  }).join('')+'</div>':empty('विद्यार्थी जोडल्यावर येथे हजेरी घेता येईल.'));
+}
+
+/* 4 fees */
+function pFee(){
+  const l=vis();
+  const tot=l.reduce((a,s)=>a+Number(s.fee||0),0),pd=l.reduce((a,s)=>a+paidOf(s),0);
+  return toolbar(false)+
+  '<div class="tiles"><div class="tile"><b>'+inr(tot)+'</b><span>एकूण फी</span></div><div class="tile"><b>'+inr(pd)+'</b><span>जमा</span></div><div class="tile"><b>'+inr(Math.max(0,tot-pd))+'</b><span>बाकी</span></div></div>'+
+  (l.length?'<div class="list">'+l.map(s=>{
+    const pd2=paidOf(s),pend=pendOf(s),pc=s.fee?Math.min(100,Math.round(pd2*100/s.fee)):100,last=(s.pay||[]).slice(-1)[0];
+    return '<div class="card"><div class="item" style="border:0;padding:0"><div><h3>'+esc(s.name)+'</h3><p class="sub">'+esc(s.batch)+'</p></div><span class="chip '+(pend?'warn':'good')+'">'+(pend?'बाकी '+inr(pend):'पूर्ण भरले')+'</span></div>'+
+     '<div class="bar" aria-hidden="true"><i style="width:'+pc+'%"></i></div>'+
+     '<p class="sub">भरले '+inr(pd2)+' / '+inr(s.fee)+(last?' · शेवटचे '+inr(last.amt)+' ('+fmtDate(last.date)+')':'')+'</p>'+
+     '<div class="payRow"><input id="pay-'+s.id+'" type="number" min="1" inputmode="numeric" placeholder="रक्कम ₹" aria-label="'+esc(s.name)+' फी रक्कम"><button class="btn" data-act="pay" data-id="'+s.id+'">जमा करा</button></div>'+
+     '<div class="row">'+(pend?'<a class="btn xs wa" target="_blank" rel="noopener" href="'+esc(waLink(s.phone,'नमस्कार, '+s.name+' यांची '+inr(pend)+' फी बाकी आहे. कृपया लवकर भरावी. - '+S.name))+'">फी आठवण</a>':'')+
+     (pd2?'<a class="btn xs ghost" target="_blank" rel="noopener" href="'+esc(waLink(s.phone,S.name+': '+s.name+' यांची आतापर्यंत '+inr(pd2)+' फी जमा झाली आहे. बाकी '+inr(pend)+'. धन्यवाद.'))+'">पावती WhatsApp</a>':'')+'</div></div>';
+  }).join('')+'</div>':empty('विद्यार्थी जोडल्यावर येथे फी दिसेल.'));
+}
+
+/* 5 marks */
+function ranksOf(t){
+  const arr=S.students.filter(s=>t.scores[s.id]!==undefined&&t.scores[s.id]!=='').map(s=>({id:s.id,v:Number(t.scores[s.id])})).sort((a,b)=>b.v-a.v);
+  const r={};let last=null,rank=0;arr.forEach((x,i)=>{if(x.v!==last){rank=i+1;last=x.v;}r[x.id]=rank;});
+  return {r:r,arr:arr};
+}
+function markMeta(t,s,rank){
+  const v=t.scores[s.id];
+  if(v===undefined||v==='')return '<span class="hint">गुण टाका</span>';
+  const pct=Math.round(Number(v)*100/t.max);
+  const msg=s.name+' ने '+t.title+' मध्ये '+v+'/'+t.max+' गुण ('+pct+'%) मिळवले. वर्गात क्रमांक '+rank+'. - '+S.name;
+  return '<span class="chip '+(pct>=75?'good':pct>=40?'warn':'bad')+'">'+pct+'%</span><span class="chip">क्रमांक '+rank+'</span><a class="btn xs wa" target="_blank" rel="noopener" href="'+esc(waLink(s.phone,msg))+'">निकाल WhatsApp</a>';
+}
+function markSummary(t){
+  const k=ranksOf(t);
+  if(!k.arr.length)return 'अजून गुण भरलेले नाहीत.';
+  const avg=k.arr.reduce((a,x)=>a+x.v,0)/k.arr.length;
+  const top=S.students.find(s=>s.id===k.arr[0].id);
+  return 'सरासरी '+avg.toFixed(1)+'/'+t.max+' · सर्वोच्च: '+esc(top?top.name:'')+' ('+k.arr[0].v+')';
+}
+function pMarks(){
+  if(!S.tests.find(t=>t.id===ui.test))ui.test=S.tests.length?S.tests[S.tests.length-1].id:null;
+  const t=S.tests.find(x=>x.id===ui.test),l=vis();
+  let body='';
+  if(t){
+    const k=ranksOf(t);
+    body='<section class="card"><div class="item" style="border:0;padding:0"><div><h2>'+esc(t.title)+'</h2><p class="sub">'+fmtDate(t.date)+' · एकूण '+t.max+' गुण</p></div>'+
+     '<button class="btn xs danger-o" data-act="delTest" data-confirm="1">टेस्ट काढा</button></div><p class="sub" id="mSum">'+markSummary(t)+'</p>'+
+     (l.length?'<div>'+l.map(s=>'<div class="mrow"><div><strong>'+esc(s.name)+'</strong> <span class="chip">'+esc(s.batch)+'</span></div>'+
+       '<div class="mscore"><input type="number" inputmode="decimal" min="0" max="'+t.max+'" step="0.5" id="m-'+s.id+'" data-mark="'+s.id+'" value="'+esc(t.scores[s.id]!==undefined?t.scores[s.id]:'')+'" aria-label="'+esc(s.name)+' गुण"><span>/ '+t.max+'</span></div>'+
+       '<div class="mmeta" id="mm-'+s.id+'">'+markMeta(t,s,k.r[s.id])+'</div></div>').join('')+'</div>':'<p class="sub">विद्यार्थी जोडा.</p>')+'</section>';
+  }
+  return toolbar(false)+
+  '<section class="card"><h2>नवीन टेस्ट</h2><form class="form" data-form="addTest" autocomplete="off">'+
+  '<div class="f"><label class="lbl" for="tn">टेस्टचे नाव</label><input id="tn" name="title" required maxlength="50" placeholder="उदा. मासिक टेस्ट २"></div>'+
+  '<div class="f"><label class="lbl" for="tm">एकूण गुण</label><input id="tm" name="max" type="number" min="1" value="50" required></div>'+
+  '<div class="f"><label class="lbl" for="td">तारीख</label><input id="td" name="date" type="date" value="'+today()+'"></div>'+
+  '<button class="btn" type="submit">टेस्ट तयार करा</button></form></section>'+
+  (S.tests.length?'<div class="tests">'+S.tests.map(x=>'<button class="chip btnchip" data-act="selTest" data-id="'+x.id+'" aria-pressed="'+(x.id===ui.test)+'">'+esc(x.title)+'</button>').join('')+'</div>':empty('अजून टेस्ट नाही. वरून पहिली टेस्ट तयार करा.'))+body;
+}
+function saveMark(inp){
+  const t=S.tests.find(x=>x.id===ui.test);if(!t)return;
+  const id=inp.dataset.mark;let v=inp.value;
+  if(v===''){delete t.scores[id];}
+  else{let n=Number(v);if(isNaN(n))return;if(n>t.max)n=t.max;if(n<0)n=0;inp.value=n;t.scores[id]=n;}
+  save();
+  const k=ranksOf(t);
+  S.students.forEach(s=>{const el=document.getElementById('mm-'+s.id);if(el)el.innerHTML=markMeta(t,s,k.r[s.id]);});
+  const ms=$('#mSum');if(ms)ms.innerHTML=markSummary(t);
+}
+
+/* 6 timetable */
+function pTT(){
+  const tn=todayName();
+  const groups=DAYS.map(d=>{
+    const l=S.tt.filter(x=>x.day===d).sort((a,b)=>a.time.localeCompare(b.time));
+    if(!l.length)return '';
+    return '<section class="card day"><h3>'+d+(d===tn?' <span class="chip good">आज</span>':'')+'</h3>'+
+      l.map(x=>'<div class="item"><span><strong>'+esc(x.time)+'</strong> &nbsp;'+esc(x.subject)+' <span class="chip">'+esc(x.batch)+'</span></span><button class="btn xs ghost" data-act="delTT" data-id="'+x.id+'" data-confirm="1">काढा</button></div>').join('')+'</section>';
+  }).join('');
+  return '<section class="card"><h2>तास जोडा</h2><form class="form" data-form="addTT" autocomplete="off">'+
+  '<div class="f"><label class="lbl" for="ttd">वार</label><select id="ttd" name="day">'+DAYS.map(d=>'<option'+(d===tn?' selected':'')+'>'+d+'</option>').join('')+'</select></div>'+
+  '<div class="f"><label class="lbl" for="ttt">वेळ</label><input id="ttt" name="time" type="time" value="07:00" required></div>'+
+  '<div class="f"><label class="lbl" for="tts">विषय</label><input id="tts" name="subject" required maxlength="40"></div>'+
+  '<div class="f"><label class="lbl" for="ttb">बॅच</label><input id="ttb" name="batch" list="batchList" maxlength="30"></div>'+
+  '<datalist id="batchList">'+batches().map(b=>'<option value="'+esc(b)+'">').join('')+'</datalist>'+
+  '<button class="btn wide" type="submit">तास जोडा</button></form></section>'+(groups||empty('अजून तास जोडलेले नाहीत.'));
+}
+
+/* 7 notices */
+function pNot(){
+  const l=S.notices.slice().sort((a,b)=>b.date.localeCompare(a.date));
+  return '<section class="card"><h2>नवी सूचना</h2><form class="form" data-form="addNote"><div class="f wide"><label class="lbl" for="nt">सूचना लिहा</label><textarea id="nt" name="text" rows="3" required maxlength="600" placeholder="उदा. उद्या सुट्टी आहे"></textarea></div><button class="btn wide" type="submit">सूचना लावा</button></form></section>'+
+  (l.length?l.map(n=>'<article class="card"><p class="pre">'+esc(n.text)+'</p><p class="sub">'+fmtDate(n.date)+'</p><div class="row">'+
+   '<a class="btn xs wa" target="_blank" rel="noopener" href="'+esc('https://wa.me/?text='+encodeURIComponent(S.name+' - सूचना\n'+n.text))+'">WhatsApp वर शेअर करा</a>'+
+   '<button class="btn xs ghost" data-act="delNote" data-id="'+n.id+'" data-confirm="1">काढा</button></div></article>').join(''):empty('अजून सूचना नाही.'));
+}
+
+/* 8 homework */
+function pHw(){
+  const t=today(),l=S.hw.slice().sort((a,b)=>(a.done-b.done)||a.due.localeCompare(b.due));
+  return '<section class="card"><h2>गृहपाठ द्या</h2><form class="form" data-form="addHw" autocomplete="off">'+
+  '<div class="f"><label class="lbl" for="hb">बॅच</label><input id="hb" name="batch" list="batchList" maxlength="30"></div>'+
+  '<div class="f"><label class="lbl" for="hs">विषय</label><input id="hs" name="subject" required maxlength="40"></div>'+
+  '<div class="f"><label class="lbl" for="hd">शेवटची तारीख</label><input id="hd" name="due" type="date" value="'+ymd(new Date(Date.now()+864e5))+'" required></div>'+
+  '<datalist id="batchList">'+batches().map(b=>'<option value="'+esc(b)+'">').join('')+'</datalist>'+
+  '<div class="f wide"><label class="lbl" for="ht">काय करायचे</label><textarea id="ht" name="text" rows="3" required maxlength="500"></textarea></div>'+
+  '<button class="btn wide" type="submit">गृहपाठ जोडा</button></form></section>'+
+  (l.length?l.map(h=>'<article class="card"><div class="meta"><span class="chip">'+esc(h.subject)+'</span>'+(h.batch?'<span class="chip">'+esc(h.batch)+'</span>':'')+
+   (h.done?'<span class="chip good">पूर्ण</span>':h.due<t?'<span class="chip bad">मुदत संपली</span>':h.due===t?'<span class="chip warn">आज शेवटचा दिवस</span>':'<span class="chip">'+fmtDate(h.due)+'</span>')+'</div>'+
+   '<p class="pre'+(h.done?' done':'')+'">'+esc(h.text)+'</p><div class="row"><button class="btn xs" data-act="hwDone" data-id="'+h.id+'">'+(h.done?'परत चालू करा':'पूर्ण झाला')+'</button>'+
+   '<a class="btn xs wa" target="_blank" rel="noopener" href="'+esc('https://wa.me/?text='+encodeURIComponent(S.name+' - गृहपाठ ('+h.subject+')\n'+h.text+'\nशेवटची तारीख: '+fmtDate(h.due)))+'">WhatsApp वर शेअर करा</a>'+
+   '<button class="btn xs ghost" data-act="delHw" data-id="'+h.id+'" data-confirm="1">काढा</button></div></article>').join(''):empty('अजून गृहपाठ नाही.'));
+}
+
+/* 9 settings */
+function pSet(){
+  return '<section class="card"><h2>क्लासची माहिती</h2><p>सध्याचे नाव: <strong>'+esc(S.name)+'</strong></p><div class="row"><button class="btn" data-act="editName">नाव बदला</button><button class="btn ghost" data-act="theme">गडद / उजळ</button></div></section>'+
+  '<section class="card"><h2>फाईल डाउनलोड</h2><p class="sub">एका क्लिकवर सर्व हिस्ट्री (विद्यार्थी, हजेरी, फी, टेस्ट गुण, गृहपाठ, सूचना) फोनच्या Downloads / Files मध्ये येते.</p>'+
+  '<div class="row"><button class="btn wa" data-act="shareCsv">Files मध्ये सेव्ह करा</button><button class="btn" data-act="dlCsv">सर्व हिस्ट्री डाउनलोड (Excel)</button><button class="btn ghost" data-act="dlJson">बॅकअप फाईल डाउनलोड</button></div>'+
+  '<p class="hint">"Files मध्ये सेव्ह करा" दाबल्यावर फोनची शेअर शीट उघडते. तिथे "Save to Files" (iPhone) किंवा "Save to device" / Drive (Android) निवडा. Excel फाईल Excel, Google Sheets किंवा फोनमधील कोणत्याही शीट ॲपमध्ये उघडते. बॅकअप फाईल परत आणण्यासाठी खाली वापरा.</p>'+
+  '<div><label class="lbl" for="rsFile">बॅकअप फाईल निवडा</label><input id="rsFile" type="file" accept=".json,application/json"></div></section>'+
+  '<section class="card"><h2>बॅकअप (मजकूर)</h2><p class="sub">सर्व माहिती याच फोन/ब्राउझरमध्ये साठवली जाते. दुसऱ्या फोनवर नेण्यासाठी बॅकअप कॉपी करून ठेवा.</p>'+
+  '<textarea id="bk" readonly rows="4" aria-label="बॅकअप मजकूर">'+esc(JSON.stringify(S))+'</textarea><div class="row"><button class="btn" data-act="copyBackup">बॅकअप कॉपी करा</button></div>'+
+  '<div><label class="lbl" for="rs">बॅकअप परत आणा (येथे पेस्ट करा)</label><textarea id="rs" rows="4"></textarea></div><div class="row"><button class="btn ghost" data-act="restore">रिस्टोर करा</button></div></section>'+
+  '<section class="card"><h2>डेटा</h2><div class="row"><button class="btn ghost" data-act="resetSample" data-confirm="1">उदाहरण डेटा परत लावा</button><button class="btn danger-o" data-act="wipe" data-confirm="1">सर्व डेटा पुसा</button></div></section>';
+}
+const PANELS={dash:pDash,stu:pStu,att:pAtt,fee:pFee,marks:pMarks,tt:pTT,not:pNot,hw:pHw,set:pSet};
+function renderPanel(){$('#panel').innerHTML=PANELS[ui.tab]();}
+function applyTheme(){const r=document.documentElement;if(S.theme)r.setAttribute('data-theme',S.theme);else r.removeAttribute('data-theme');}
+let storageOK=true;
+try{localStorage.setItem('__t','1');localStorage.removeItem('__t');}catch(e){storageOK=false;}
+try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();}catch(e){}
+function renderNote(){
+  const el=$('#storeNote');if(!el)return;
+  el.innerHTML=storageOK?'':'<div class="banner"><span>या व्ह्यूअरमध्ये माहिती सेव्ह होणार नाही. फाईल Chrome किंवा Safari मध्ये उघडा किंवा Netlify लिंक वापरा. तोपर्यंत डाउनलोड बटणाने बॅकअप घ्या.</span></div>';
+}
+function renderAll(){applyTheme();renderNote();renderHeader();renderTabs();renderPanel();}
+function wipeTo(o){S=norm(o);ui.open=null;ui.test=null;ui.batch='';ui.q='';save();renderAll();}
+
+/* downloads */
+function cell(v){
+  let t=String(v==null?'':v);
+  if(/^[=@]/.test(t)||/^[+\-]\D/.test(t))t="'"+t;
+  return '"'+t.replace(/"/g,'""')+'"';
+}
+function buildCsv(){
+  const rows=[];const add=function(){rows.push(Array.prototype.slice.call(arguments).map(cell).join(','));};
+  const byId={};S.students.forEach(s=>{byId[s.id]=s;});
+  add(S.name);add('डाउनलोड तारीख',fmtDate(today()));add();
+  add('विद्यार्थी यादी');add('नाव','मोबाईल','बॅच','एकूण फी','भरलेली फी','बाकी फी','हजेरी %');
+  S.students.forEach(s=>{const p=attPct(s.id);add(s.name,s.phone,s.batch,s.fee,paidOf(s),pendOf(s),p===null?'':p);});
+  add();add('हजेरी इतिहास');add('तारीख','विद्यार्थी','बॅच','स्थिती');
+  Object.keys(S.att).sort().forEach(d=>{Object.keys(S.att[d]).forEach(id=>{const s=byId[id];if(s)add(fmtDate(d),s.name,s.batch,S.att[d][id]==='P'?'उपस्थित':'गैरहजर');});});
+  add();add('फी जमा इतिहास');add('तारीख','विद्यार्थी','रक्कम');
+  S.students.forEach(s=>{(s.pay||[]).forEach(x=>add(fmtDate(x.date),s.name,x.amt));});
+  add();add('टेस्ट गुण');add('टेस्ट','तारीख','विद्यार्थी','मिळालेले गुण','एकूण गुण','टक्के');
+  S.tests.forEach(t=>{S.students.forEach(s=>{const v=t.scores[s.id];if(v!==undefined&&v!=='')add(t.title,fmtDate(t.date),s.name,v,t.max,Math.round(Number(v)*100/t.max));});});
+  add();add('गृहपाठ');add('बॅच','विषय','काम','शेवटची तारीख','स्थिती');
+  S.hw.forEach(h=>add(h.batch,h.subject,h.text,fmtDate(h.due),h.done?'पूर्ण':'चालू'));
+  add();add('सूचना');add('तारीख','सूचना');
+  S.notices.forEach(n=>add(fmtDate(n.date),n.text));
+  return '﻿'+rows.join('\r\n');
+}
+function viaClaude(name,text,fallback){
+  try{
+    if(!(window.claude&&typeof window.claude.use==='function'))return false;
+    window.claude.use('downloads').then(function(d){
+      if(!d){fallback();return;}
+      d.save({filename:name,data:text}).then(function(){toast('फाईल सेव्ह केली: '+name);},function(err){
+        if(err&&err.code==='declined')toast('सेव्ह रद्द केले');else fallback();});
+    },function(){fallback();});
+    return true;
+  }catch(e){return false;}
+}
+function saveFile(name,text,type,noClaude){
+  if(!noClaude&&viaClaude(name,text,function(){saveFile(name,text,type,true);}))return;
+  try{
+    const blob=new Blob([text],{type:type});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=name;a.style.display='none';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(function(){URL.revokeObjectURL(url);},5000);
+    toast('डाउनलोड सुरू: '+name);
+  }catch(e){toast('डाउनलोड झाले नाही. सेटिंग्जमधील मजकूर बॅकअप कॉपी करा.');}
+}
+
+function shareFile(name,text,type){
+  if(viaClaude(name,text,function(){saveFile(name,text,type,true);}))return;
+  try{
+    const f=new File([text],name,{type:type});
+    if(navigator.canShare&&navigator.canShare({files:[f]})){
+      navigator.share({files:[f],title:name}).then(function(){toast('फाईल सेव्ह / शेअर केली');},function(err){
+        if(!err||err.name!=='AbortError')saveFile(name,text,type);});
+      return;
+    }
+  }catch(e){}
+  saveFile(name,text,type);
+}
+
+/* events */
+document.addEventListener('click',function(e){
+  const b=e.target.closest('[data-act],[data-tab],[data-go]');if(!b)return;
+  if(b.dataset.tab){ui.tab=b.dataset.tab;renderTabs();renderPanel();return;}
+  if(b.dataset.go){ui.tab=b.dataset.go;renderTabs();renderPanel();window.scrollTo(0,0);return;}
+  if(b.dataset.confirm&&b.dataset.armed!=='1'){
+    b.dataset.armed='1';b.dataset.orig=b.textContent;b.textContent='पुन्हा दाबा';b.classList.add('armed');
+    setTimeout(function(){if(b.isConnected){b.dataset.armed='';b.textContent=b.dataset.orig;b.classList.remove('armed');}},3000);
+    return;
+  }
+  const id=b.dataset.id,act=b.dataset.act;
+  const st=id?S.students.find(s=>s.id===id):null;
+  switch(act){
+    case 'editName':ui.edit=true;renderHeader();window.scrollTo(0,0);{const i=$('#nameIn');if(i){i.focus();i.select();}}break;
+    case 'cancelName':ui.edit=false;renderHeader();break;
+    case 'cutName':{const i=$('#nameIn');if(i){const v=i.value;if(v){try{navigator.clipboard.writeText(v).catch(function(){});}catch(x){}}i.value='';i.focus();toast('नाव कट केले. नवीन नाव लिहा.');}}break;
+    case 'theme':{const dark=S.theme?S.theme==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;S.theme=dark?'light':'dark';save();applyTheme();}break;
+    case 'complain':ui.open=ui.open===id?null:id;renderStuList();break;
+    case 'preset':{const ta=document.getElementById('cmp-'+id);if(ta){ta.value=ta.value.replace(/\s*$/,'')+'\n• '+PRESETS[+b.dataset.i]+'\n';drafts[id]=ta.value;updateWa(id);ta.focus();}}break;
+    case 'copyPhone':if(st)copy(st.phone,'नंबर कॉपी झाला');break;
+    case 'copyMsg':{const ta=document.getElementById('cmp-'+id);if(ta)copy(ta.value,'मेसेज कॉपी झाला',ta);}break;
+    case 'delStu':S.students=S.students.filter(s=>s.id!==id);if(ui.open===id)ui.open=null;save();renderPanel();toast('विद्यार्थी काढला');break;
+    case 'mark':{const d=ui.attDate;S.att[d]=S.att[d]||{};if(S.att[d][id]===b.dataset.v)delete S.att[d][id];else S.att[d][id]=b.dataset.v;save();renderPanel();}break;
+    case 'allP':{const d=ui.attDate;S.att[d]=S.att[d]||{};vis().forEach(s=>{S.att[d][s.id]='P';});save();renderPanel();toast('सर्व उपस्थित केले');}break;
+    case 'pay':{const inp=document.getElementById('pay-'+id),n=Number(inp&&inp.value);
+      if(!st||!(n>0)){toast('योग्य रक्कम टाका');break;}
+      st.pay=st.pay||[];st.pay.push({amt:n,date:today()});save();renderPanel();toast(inr(n)+' जमा केले');}break;
+    case 'selTest':ui.test=id;renderPanel();break;
+    case 'delTest':S.tests=S.tests.filter(t=>t.id!==ui.test);ui.test=null;save();renderPanel();break;
+    case 'delTT':S.tt=S.tt.filter(x=>x.id!==id);save();renderPanel();break;
+    case 'delNote':S.notices=S.notices.filter(x=>x.id!==id);save();renderPanel();break;
+    case 'hwDone':{const h=S.hw.find(x=>x.id===id);if(h){h.done=!h.done;save();renderPanel();}}break;
+    case 'delHw':S.hw=S.hw.filter(x=>x.id!==id);save();renderPanel();break;
+    case 'clearSample':{const o=norm({name:S.name,tag:S.tag,theme:S.theme,students:[]});o.sample=false;wipeTo(o);toast('उदाहरण डेटा काढला');}break;
+    case 'dlCsv':saveFile('coaching-history-'+today()+'.csv',buildCsv(),'text/csv;charset=utf-8');break;
+    case 'shareCsv':shareFile('coaching-history-'+today()+'.csv',buildCsv(),'text/csv');break;
+    case 'dlJson':saveFile('coaching-backup-'+today()+'.json',JSON.stringify(S),'application/json');break;
+    case 'copyBackup':{const t=$('#bk');copy(JSON.stringify(S),'बॅकअप कॉपी झाला',t);}break;
+    case 'restore':{let o;try{o=JSON.parse($('#rs').value.trim());}catch(x){o=null;}
+      if(!o||!Array.isArray(o.students)){toast('बॅकअप चुकीचा आहे');break;}
+      wipeTo(o);toast('बॅकअप परत आणला');}break;
+    case 'resetSample':wipeTo(seed());toast('उदाहरण डेटा लावला');break;
+    case 'wipe':{const o=norm({name:S.name,tag:S.tag,theme:S.theme,students:[]});o.sample=false;wipeTo(o);toast('सर्व डेटा पुसला');}break;
+  }
+});
+function updateWa(id){const s=S.students.find(x=>x.id===id),a=document.getElementById('waSend-'+id);if(s&&a)a.href=waLink(s.phone,drafts[id]||'');}
+document.addEventListener('input',function(e){
+  const t=e.target;
+  if(t.id==='q'){ui.q=t.value;renderStuList();}
+  else if(t.classList&&t.classList.contains('cmpText')){drafts[t.dataset.id]=t.value;updateWa(t.dataset.id);}
+});
+document.addEventListener('change',function(e){
+  const t=e.target;
+  if(t.id==='batchSel'){ui.batch=t.value;renderPanel();}
+  else if(t.id==='attDate'){ui.attDate=t.value||today();renderPanel();}
+  else if(t.id==='rsFile'){
+    const f=t.files&&t.files[0];if(!f)return;
+    const r=new FileReader();
+    r.onload=function(){let o=null;try{o=JSON.parse(String(r.result));}catch(x){}
+      if(!o||!Array.isArray(o.students)){toast('ही बॅकअप फाईल नाही');return;}
+      wipeTo(o);toast('बॅकअप परत आणला');};
+    r.onerror=function(){toast('फाईल वाचता आली नाही');};
+    r.readAsText(f);
+  }
+  else if(t.dataset&&t.dataset.mark){saveMark(t);}
+});
+document.addEventListener('submit',function(e){
+  const f=e.target;e.preventDefault();
+  if(f.id==='nameForm'){
+    S.name=$('#nameIn').value.trim()||'तुमच्या क्लासचे नाव';S.tag=$('#tagIn').value.trim();
+    ui.edit=false;save();renderHeader();renderPanel();toast('नाव सेव्ह झाले');return;
+  }
+  const fd=new FormData(f),g=n=>String(fd.get(n)||'').trim();
+  switch(f.dataset.form){
+    case 'addStu':{
+      const ph=g('phone').replace(/[^\d+]/g,'');
+      if(ph.replace(/\D/g,'').length<10){toast('मोबाईल नंबर १० अंकी हवा');return;}
+      S.students.push({id:uid(),name:g('name'),phone:ph,batch:g('batch')||'सामान्य',fee:Number(g('fee'))||0,pay:[]});
+      save();renderPanel();toast('विद्यार्थी जोडला');break;}
+    case 'addTest':{
+      const id=uid();S.tests.push({id:id,title:g('title'),max:Number(g('max'))||50,date:g('date')||today(),scores:{}});
+      ui.test=id;save();renderPanel();toast('टेस्ट तयार झाली');break;}
+    case 'addTT':S.tt.push({id:uid(),day:g('day'),time:g('time'),subject:g('subject'),batch:g('batch')});save();renderPanel();toast('तास जोडला');break;
+    case 'addNote':S.notices.push({id:uid(),text:g('text'),date:today()});save();renderPanel();toast('सूचना लावली');break;
+    case 'addHw':S.hw.push({id:uid(),batch:g('batch'),subject:g('subject'),text:g('text'),due:g('due'),done:false});save();renderPanel();toast('गृहपाठ जोडला');break;
+  }
+});
+
+renderAll();
+})();
+</script>
+</body>
+</html>
